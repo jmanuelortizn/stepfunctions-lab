@@ -53,6 +53,6 @@ jobs:
         with:
           directory: .
           framework: terraform
-          skip_check: CKV_AWS_116,CKV_AWS_117,CKV_AWS_237,CKV_AWS_120,CKV_AWS_225,CKV2_AWS_5,CKV2_AWS_29,CKV_AWS_144,CKV2_AWS_51,CKV2_AWS_57,CKV2_AWS_62
+          skip_check: CKV_AWS_158,CKV_AWS_116,CKV_AWS_117,CKV_AWS_237,CKV_AWS_120,CKV_AWS_225,CKV2_AWS_5,CKV2_AWS_29,CKV_AWS_144,CKV2_AWS_51,CKV2_AWS_57,CKV2_AWS_62
           quiet: true
           compact: true

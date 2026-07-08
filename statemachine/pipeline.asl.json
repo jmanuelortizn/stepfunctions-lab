@@ -1,0 +1,168 @@
+{
+  "Comment": "Data pipeline lab: Task, Choice, Wait, Parallel, Map, Pass, Retry, Catch, Succeed, Fail",
+  "StartAt": "ValidateInput",
+  "States": {
+
+    "ValidateInput": {
+      "Comment": "TASK state: invokes a Lambda. RETRY handles transient errors with exponential backoff; CATCH routes fatal errors to the failure handler.",
+      "Type": "Task",
+      "Resource": "${validate_input_arn}",
+      "Retry": [
+        {
+          "ErrorEquals": ["TransientError", "Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleFailure"
+        }
+      ],
+      "Next": "IsInputValid"
+    },
+
+    "IsInputValid": {
+      "Comment": "CHOICE state: branches on the is_valid flag returned by validation.",
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.is_valid",
+          "BooleanEquals": true,
+          "Next": "WaitForBatchWindow"
+        }
+      ],
+      "Default": "InvalidInputFail"
+    },
+
+    "InvalidInputFail": {
+      "Comment": "FAIL state: terminates the execution with an explicit error and cause.",
+      "Type": "Fail",
+      "Error": "InvalidInput",
+      "Cause": "Payload failed validation: required fields missing or malformed."
+    },
+
+    "WaitForBatchWindow": {
+      "Comment": "WAIT state: pauses 5 seconds (simulates a batching window). Also supports Timestamp/SecondsPath for dynamic waits.",
+      "Type": "Wait",
+      "Seconds": 5,
+      "Next": "EnrichAndCheckQuality"
+    },
+
+    "EnrichAndCheckQuality": {
+      "Comment": "PARALLEL state: runs enrichment and quality-check branches concurrently. Output is an array with one element per branch. Catch fails fast on bad data.",
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "EnrichData",
+          "States": {
+            "EnrichData": {
+              "Type": "Task",
+              "Resource": "${enrich_data_arn}",
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "QualityCheck",
+          "States": {
+            "QualityCheck": {
+              "Type": "Task",
+              "Resource": "${quality_check_arn}",
+              "Retry": [
+                {
+                  "ErrorEquals": ["Lambda.ServiceException"],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 2
+                }
+              ],
+              "End": true
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.parallel_results",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleFailure"
+        }
+      ],
+      "Next": "ProcessRecords"
+    },
+
+    "ProcessRecords": {
+      "Comment": "MAP state: fans out over $.records, invoking the processor once per item. MaxConcurrency bounds parallelism (critical for downstream rate limits).",
+      "Type": "Map",
+      "ItemsPath": "$.records",
+      "MaxConcurrency": 2,
+      "ItemProcessor": {
+        "ProcessorConfig": { "Mode": "INLINE" },
+        "StartAt": "ProcessSingleRecord",
+        "States": {
+          "ProcessSingleRecord": {
+            "Type": "Task",
+            "Resource": "${process_record_arn}",
+            "Retry": [
+              {
+                "ErrorEquals": ["States.TaskFailed"],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 2,
+                "BackoffRate": 2.0
+              }
+            ],
+            "End": true
+          }
+        }
+      },
+      "ResultPath": "$.processed_records",
+      "Next": "BuildSummary"
+    },
+
+    "BuildSummary": {
+      "Comment": "PASS state: no compute — reshapes the payload using Parameters and intrinsic functions.",
+      "Type": "Pass",
+      "Parameters": {
+        "pipeline": "stepfunctions-lab",
+        "source.$": "$.source",
+        "total_records.$": "States.ArrayLength($.processed_records)",
+        "processed_records.$": "$.processed_records",
+        "enrichment.$": "$.parallel_results[0]",
+        "quality.$": "$.parallel_results[1]"
+      },
+      "Next": "Notify"
+    },
+
+    "Notify": {
+      "Comment": "Final TASK: emits the summary (stand-in for SNS/EventBridge).",
+      "Type": "Task",
+      "Resource": "${notify_arn}",
+      "Next": "PipelineSucceeded"
+    },
+
+    "PipelineSucceeded": {
+      "Comment": "SUCCEED state: explicit happy-path terminal state.",
+      "Type": "Succeed"
+    },
+
+    "HandleFailure": {
+      "Comment": "PASS used as an error normalizer before the terminal Fail — a common real-world pattern (you could also alert here).",
+      "Type": "Pass",
+      "Parameters": {
+        "status": "failed",
+        "error_detail.$": "$.error"
+      },
+      "Next": "PipelineFailed"
+    },
+
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Error": "PipelineExecutionFailed",
+      "Cause": "A task raised an unrecoverable error. See error_detail in the execution history."
+    }
+  }
+}

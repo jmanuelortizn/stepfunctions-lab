@@ -31,14 +31,11 @@ jobs:
       - name: Validate, lint and test each module
         run: |
           set -euo pipefail
-          for dir in modules/*/; do
-            echo "::group::$dir"
-            terraform -chdir="$dir" init -backend=false
-            terraform -chdir="$dir" validate
-            ( cd "$dir" && tflint --config="$GITHUB_WORKSPACE/.tflint.hcl" )
-            terraform -chdir="$dir" test
-            echo "::endgroup::"
-          done
+          terraform init -backend=false
+          terraform validate
+          tflint --config="$GITHUB_WORKSPACE/.tflint.hcl" )
+          terraform test
+
 
   sast:
     name: SAST (Trivy + Checkov)

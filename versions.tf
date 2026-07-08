@@ -23,7 +23,7 @@ provider "aws" {
     tags = {
       Project   = var.project_name
       ManagedBy = "terraform"
-      Purpose   = "stepfunctions-lab"
+      Purpose   = "stepfunctions-test"
     }
   }
   profile = var.aws_profile

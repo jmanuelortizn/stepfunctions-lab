@@ -59,7 +59,10 @@ resource "aws_lambda_function" "pipeline" {
   handler = "${each.key}.handler"
   runtime = "python3.12"
   timeout = 15
-
+  # Enable AWS X-Ray Active Tracing
+  tracing_config {
+    mode = "Active"
+  }
   depends_on = [aws_cloudwatch_log_group.lambda]
 }
 

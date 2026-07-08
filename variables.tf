@@ -13,7 +13,7 @@ variable "project_name" {
 variable "log_retention_days" {
   description = "CloudWatch Logs retention for Lambdas and the state machine."
   type        = number
-  default     = 3
+  default     = 365
 }
 variable "aws_profile" {
   description = "AWS CLI profile to use for credentials."

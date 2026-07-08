@@ -47,20 +47,23 @@ data "archive_file" "lambda_zip" {
 }
 
 resource "aws_lambda_function" "pipeline" {
-  for_each = local.lambda_functions
-
-  function_name = "${var.project_name}-${replace(each.key, "_", "-")}"
-  description   = each.value.description
-  role          = aws_iam_role.lambda_exec.arn
-
-  filename         = data.archive_file.lambda_zip[each.key].output_path
-  source_code_hash = data.archive_file.lambda_zip[each.key].output_base64sha256
-
-  handler = "${each.key}.handler"
-  runtime = "python3.12"
-  timeout = 15
-
-  depends_on = [aws_cloudwatch_log_group.lambda]
+  for_each                       = local.lambda_functions
+  function_name                  = "${var.project_name}-${replace(each.key, "_", "-")}"
+  description                    = each.value.description
+  role                           = aws_iam_role.lambda_exec.arn
+  filename                       = data.archive_file.lambda_zip[each.key].output_path
+  source_code_hash               = data.archive_file.lambda_zip[each.key].output_base64sha256
+  handler                        = "${each.key}.handler"
+  runtime                        = "python3.12"
+  timeout                        = 15
+  reserved_concurrent_executions = 20
+  # Enable AWS X-Ray Active Tracing
+  tracing_config {
+    mode = "Active"
+  }
+  # Link the code signing policy
+  code_signing_config_arn = aws_lambda_code_signing_config.enforced_signing.arn
+  depends_on              = [aws_cloudwatch_log_group.lambda]
 }
 
 # Explicit log groups so retention is controlled by IaC instead of
@@ -70,4 +73,21 @@ resource "aws_cloudwatch_log_group" "lambda" {
 
   name              = "/aws/lambda/${var.project_name}-${replace(each.key, "_", "-")}"
   retention_in_days = var.log_retention_days
+}
+
+resource "aws_signer_signing_profile" "lambda_profile" {
+  platform_id = "AWSLambda-SHA384-ECDSA"
+  name_prefix = "lambda_signing_profile_"
+}
+
+resource "aws_lambda_code_signing_config" "enforced_signing" {
+  description = "Enforce signing for lambdas."
+  allowed_publishers {
+    signing_profile_version_arns = [
+      aws_signer_signing_profile.lambda_profile.version_arn
+    ]
+  }
+  policies {
+    untrusted_artifact_on_deployment = "Enforce"
+  }
 }

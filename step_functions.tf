@@ -77,4 +77,7 @@ resource "aws_sfn_state_machine" "pipeline" {
     include_execution_data = true
     level                  = "ALL"
   }
+  tracing_configuration {
+    enabled = true
+  }
 }

@@ -61,7 +61,9 @@ resource "aws_lambda_function" "pipeline" {
   tracing_config {
     mode = "Active"
   }
-  depends_on = [aws_cloudwatch_log_group.lambda]
+  # Link the code signing policy
+  code_signing_config_arn = aws_lambda_code_signing_config.enforced_signing.arn
+  depends_on              = [aws_cloudwatch_log_group.lambda]
 }
 
 # Explicit log groups so retention is controlled by IaC instead of
@@ -74,7 +76,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
 }
 
 resource "aws_signer_signing_profile" "lambda_profile" {
-  platform_id = "AWSLambda-SHA256-ECDSA"
+  platform_id = "AWSLambda-SHA384-ECDSA"
   name_prefix = "lambda_signing_profile_"
 }
 

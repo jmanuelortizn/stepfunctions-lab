@@ -33,7 +33,7 @@ jobs:
           set -euo pipefail
           terraform init -backend=false
           terraform validate
-          tflint --config="$GITHUB_WORKSPACE/.tflint.hcl" )
+          tflint --config="$GITHUB_WORKSPACE/.tflint.hcl"
 
 
   sast:

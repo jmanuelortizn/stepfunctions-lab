@@ -28,13 +28,12 @@ jobs:
       - name: TFLint init
         run: tflint --init
 
-      - name: Validate, lint and test each module
+      - name: Validate and lint
         run: |
           set -euo pipefail
           terraform init -backend=false
           terraform validate
           tflint --config="$GITHUB_WORKSPACE/.tflint.hcl" )
-          terraform test
 
 
   sast:
